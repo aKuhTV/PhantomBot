@@ -16,9 +16,9 @@
  */
 package tv.phantombot.twitch.irc.chat.utils;
 
-import java.util.HashMap;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
+import org.java_websocket.exceptions.WebsocketNotConnectedException;
 
 import tv.phantombot.twitch.irc.TwitchSession;
 import tv.phantombot.PhantomBot;
@@ -46,7 +46,8 @@ public class MessageQueue implements Runnable {
         // Start a new thread for our final queue.
         this.thread = new Thread(this, "tv.phantombot.wschat.twitch.chat.utils.MessageQueue::run");
         this.thread.setUncaughtExceptionHandler(com.gmt2001.UncaughtExceptionHandler.instance());
-        
+        this.thread.setPriority(Thread.MAX_PRIORITY);
+
     }
 
     /**
@@ -141,6 +142,9 @@ public class MessageQueue implements Runnable {
                     session.sendRaw("PRIVMSG #" + this.channelName + " :" + message.getMessage());
                     com.gmt2001.Console.out.println("[CHAT] " + message.getMessage());
                 }
+            } catch (WebsocketNotConnectedException ex) {
+                com.gmt2001.Console.err.println("Failed to send message due to being disconnected from Twitch IRC.");
+                session.reconnect();
             } catch (InterruptedException ex) {
                 com.gmt2001.Console.err.printStackTrace(ex);
             }

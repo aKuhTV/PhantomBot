@@ -119,7 +119,7 @@
 
         if (s.match(/\(readfile/)) {
             if (s.search(/\((readfile ([^)]+)\))/g) >= 0) {
-                s = $.replace(s, '(' + RegExp.$1, $.readFile('./addons/' + RegExp.$2)[0]);
+                s = $.replace(s, '(' + RegExp.$1, $.readFile('./addons/' + RegExp.$2.replace(/\.\./g, ''))[0]);
             }
         }
 
@@ -139,7 +139,7 @@
             var file = s.match(/\(writefile (.+), (.+), (.+)\)/)[1],
                 append = (s.match(/\(writefile (.+), (.+), (.+)\)/)[2] == 'true' ? true : false),
                 string = s.match(/\(writefile (.+), (.+), (.+)\)/)[3];
-            $.writeToFile(string, './addons/' + file, append);
+            $.writeToFile(string, './addons/' + file.replace(/\.\./g, ''), append);
             return null;
         }
 
@@ -150,16 +150,6 @@
         if (s.match(/\(encodeurl ([\w\W]+)\)/)) {
             var m = s.match(/\(encodeurl ([\w\W]+)\)/);
             s = $.replace(s, m[0], encodeURI(m[1]));
-        }
-
-        if (s.match(/\(math (.*)\)/)) {
-            var mathStr = s.match(/\(math (.*)\)/)[1].replace(/\s/g, '');
-
-            if (mathStr.length === 0) {
-                return null;
-            }
-
-            s = $.replace(s, s.match(/\(math (.*)\)/)[0], String(eval(mathStr)));
         }
 
         if (s.match(reCustomAPIJson) || s.match(reCustomAPI)) {
@@ -417,32 +407,6 @@
         }
 
         /**
-         * @discordcommandpath permcom [command] [permission] - Sets a permission on that command. Either 0 which is everyone or 1 is administrators.
-         */
-        if (command.equalsIgnoreCase('permcom')) {
-            if (action === undefined || subAction === undefined) {
-                $.discord.say(channel, $.discord.userPrefix(mention) + $.lang.get('discord.customcommands.permcom.usage'));
-                return;
-            }
-
-            action = action.replace('!', '').toLowerCase();
-
-            if (!$.discord.commandExists(action)) {
-                $.discord.say(channel, $.discord.userPrefix(mention) + $.lang.get('discord.customcommands.permcom.404'));
-                return;
-            }
-
-            if (subAction != 1 && subAction != 0) {
-                $.discord.say(channel, $.discord.userPrefix(mention) + $.lang.get('discord.customcommands.permcom.syntax.error'));
-                return;
-            }
-
-            $.inidb.set('discordPermcom', action, subAction);
-            $.discord.setCommandPermission(action, subAction);
-            $.discord.say(channel, $.discord.userPrefix(mention) + $.lang.get('discord.customcommands.permcom.success', action, subAction));
-        }
-
-        /**
          * @discordcommandpath channelcom [command] [channel / --global / --list] - Makes a command only work in that channel, spectate  the channels with a comma and space for multiple, use --global as the channel to make the command global again.
          */
         if (command.equalsIgnoreCase('channelcom')) {
@@ -597,7 +561,6 @@
         $.discord.registerCommand('./discord/commands/customCommands.js', 'addcom', 1);
         $.discord.registerCommand('./discord/commands/customCommands.js', 'delcom', 1);
         $.discord.registerCommand('./discord/commands/customCommands.js', 'editcom', 1);
-        $.discord.registerCommand('./discord/commands/customCommands.js', 'permcom', 1);
         $.discord.registerCommand('./discord/commands/customCommands.js', 'coolcom', 1);
         $.discord.registerCommand('./discord/commands/customCommands.js', 'channelcom', 1);
         $.discord.registerCommand('./discord/commands/customCommands.js', 'pricecom', 1);

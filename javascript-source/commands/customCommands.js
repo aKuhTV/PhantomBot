@@ -17,11 +17,11 @@
 
 (function() {
     // Pre-build regular expressions.
-    var reCustomAPI = new RegExp(/\(customapi\s([\w\W:\/\$\=\?\&\-]+)\)/), // URL[1]
+    var reCustomAPI = new RegExp(/\(customapi\s([\w\-\.\_\~\:\/\?\#\[\]\@\!\$\&\'\(\)\*\+\,\;\=]+)\)/), // URL[1]
         reCustomAPIJson = new RegExp(/\(customapijson ([\w\.:\/\$=\?\&\-]+)\s([\w\W]+)\)/), // URL[1], JSONmatch[2..n]
         reCustomAPITextTag = new RegExp(/{([\w\W]+)}/),
         reCommandTag = new RegExp(/\(command\s([\w]+)\)/),
-        tagCheck = new RegExp(/\(views\)|\(subscribers\)|\(age\)|\(sender\)|\(@sender\)|\(baresender\)|\(random\)|\(1\)|\(2\)|\(3\)|\(count\)|\(pointname\)|\(points\)|\(currenttime|\(price\)|\(#|\(uptime\)|\(follows\)|\(game\)|\(status\)|\(touser\)|\(echo\)|\(alert [,.\w]+\)|\(readfile|\(1=|\(countdown=|\(countup=|\(downtime\)|\(pay\)|\(onlineonly\)|\(offlineonly\)|\(code=|\(followage\)|\(gameinfo\)|\(titleinfo\)|\(gameonly=|\(useronly=|\(playtime\)|\(gamesplayed\)|\(pointtouser\)|\(lasttip\)|\(writefile .+\)|\(runcode .+\)|\(readfilerand|\(team_|\(commandcostlist\)|\(playsound |\(customapi |\(customapijson /),
+        tagCheck = new RegExp(/\(help=|\(views\)|\(subscribers\)|\(age\)|\(sender\)|\(@sender\)|\(baresender\)|\(random\)|\(1\)|\(2\)|\(3\)|\(count\)|\(pointname\)|\(points\)|\(currenttime|\(price\)|\(#|\(uptime\)|\(follows\)|\(game\)|\(status\)|\(touser\)|\(echo\)|\(alert [,.\w]+\)|\(readfile|\(1=|\(countdown=|\(countup=|\(downtime\)|\(pay\)|\(onlineonly\)|\(offlineonly\)|\(code=|\(followage\)|\(followdate\)|\(hours\)|\(gameinfo\)|\(titleinfo\)|\(gameonly=|\(useronly=|\(playtime\)|\(gamesplayed\)|\(pointtouser\)|\(lasttip\)|\(writefile .+\)|\(readfilerand|\(team_|\(commandcostlist\)|\(playsound |\(customapi |\(customapijson /),
         customCommands = [],
         ScriptEventManager = Packages.tv.phantombot.script.ScriptEventManager,
         CommandEvent = Packages.tv.phantombot.event.command.CommandEvent;
@@ -83,6 +83,16 @@
             }
         }
 
+        if (message.match(/\(help=.*\)/g) && event.getArgs()[0] === undefined) {
+            message = message.match(/\(help=(.*?)\)/)[1];
+            $.say(message);
+            return null;
+        }
+
+        if (message.match(/\(help=.*\)/g)) {
+            message = $.replace(message, message.match(/(\(help=.*\))/)[1], '');
+        }
+
         if (message.match(/\(views\)/g)) {
             message = $.replace(message, '(views)', $.twitchcache.getViews());
         }
@@ -109,7 +119,7 @@
 
         if (message.match(/\(readfile/)) {
             if (message.search(/\((readfile ([^)]+)\))/g) >= 0) {
-                message = $.replace(message, '(' + RegExp.$1, $.readFile('./addons/' + RegExp.$2)[0]);
+                message = $.replace(message, '(' + RegExp.$1, $.readFile('./addons/' + RegExp.$2.replace(/\.\./g, ''))[0]);
             }
         }
 
@@ -117,7 +127,7 @@
             if (message.search(/\((readfilerand ([^)]+)\))/g) >= 0) {
                 var path = RegExp.$2;
                 var path2 = RegExp.$1;
-                var results = $.arrayShuffle($.readFile('./addons/' + path.trim()));
+                var results = $.arrayShuffle($.readFile('./addons/' + path.trim().replace(/\.\./g, '')));
                 message = $.replace(message, '(' + path2.trim(), $.randElement(results));
             }
         }
@@ -126,20 +136,9 @@
             message = $.replace(message, '(adminonlyedit)', '');
         }
 
-        if (message.match(/\(runcode/)) {
-            var code = message.match(/\(runcode (.*)\)/)[1];
-
-            try {
-                eval(code);
-            } catch (ex) {
-                $.log.error('Failed to run custom code: ' + ex.message);
-            }
-            return null;
-        }
-
         if (message.match(/\(pointtouser\)/)) {
             if (event.getArgs()[0] !== undefined) {
-                message = $.replace(message, '(pointtouser)', (event.getArguments().split(' ')[0] + ' -> '));
+                message = $.replace(message, '(pointtouser)', (String(event.getArgs()[0]).replace(/[^a-zA-Z0-9_@]/ig, '') + ' -> '));
             } else {
                 message = $.replace(message, '(pointtouser)', $.userPrefix(event.getSender(), true));
             }
@@ -231,6 +230,10 @@
             message = $.replace(message, '(senderrank)', $.resolveRank(event.getSender()));
         }
 
+        if (message.match(/\(senderrankonly\)/g)) {
+            message = $.replace(message, '(senderrankonly)', $.getRank(event.getSender()));
+        }
+
         if (message.match(/\(@sender\)/g)) {
             message = $.replace(message, '(@sender)', $.userPrefix(event.getSender(), true));
         }
@@ -268,7 +271,7 @@
 
         if (message.match(/\(random\)/g)) {
             try {
-                message = $.replace(message, '(random)', $.username.resolve($.randElement($.users)[0]));
+                message = $.replace(message, '(random)', $.username.resolve($.randElement($.users)));
             } catch (ex) {
                 message = $.replace(message, '(random)', $.username.resolve($.botName));
             }
@@ -276,7 +279,7 @@
 
         if (message.match(/\(randomrank\)/g)) {
             try {
-                message = $.replace(message, '(randomrank)', $.resolveRank($.randElement($.users)[0]));
+                message = $.replace(message, '(randomrank)', $.resolveRank($.randElement($.users)));
             } catch (ex) {
                 message = $.replace(message, '(randomrank)', $.resolveRank($.botName));
             }
@@ -320,7 +323,7 @@
         }
 
         if (message.match(/\(touser\)/g)) {
-            message = $.replace(message, '(touser)', (event.getArgs()[0] === undefined ? $.username.resolve(event.getSender()) : String(event.getArgs()[0]).replace(/[^a-z0-9_@]/ig, '')));
+            message = $.replace(message, '(touser)', (event.getArgs()[0] === undefined ? $.username.resolve(event.getSender()) : String(event.getArgs()[0]).replace(/[^a-zA-Z0-9_@]/ig, '')));
         }
 
         if (message.match(/\(echo\)/g)) {
@@ -337,8 +340,8 @@
 
         if (message.match(/\(code=/g)) {
             var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
-                length = message.substr(6).replace(')', '');
-            text = '',
+                length = message.substr(6).replace(')', ''),
+                text = '',
                 i;
 
             for (i = 0; i < length; i++) {
@@ -372,6 +375,26 @@
             } else {
                 message = $.replace(message, '(titleinfo)', $.lang.get('streamcommand.title.online', $.getStatus($.channelName), String($.getStreamUptime($.channelName))));
             }
+        }
+
+        if (message.match(/\(followdate\)/g)) {
+            var args = event.getArgs(),
+                channel = $.channelName,
+                sender = event.getSender();
+
+            if (args.length > 0) sender = args[0].replace('@','');
+            if (args.length > 1) channel = args[1].replace('@','');
+
+            message = $.replace(message, '(followdate)', $.getFollowDate(event.getSender(), sender, channel));
+        }
+
+        if (message.match(/\(hours\)/g)) {
+            var args = event.getArgs(),
+                sender = event.getSender();
+
+            if (args.length > 0) sender = args[0].replace('@','');
+
+            message = $.replace(message, '(hours)', parseInt($.getUserTime(sender) / 3600));
         }
 
         if (message.match(/\(followage\)/g)) {
@@ -423,22 +446,12 @@
             return null;
         }
 
-        if (message.match(/\(math (.*)\)/)) {
-            var mathStr = message.match(/\(math (.*)\)/)[1].replace(/\s/g, '');
-
-            if (mathStr.length === 0) {
-                return null;
-            }
-
-            message = $.replace(message, message.match(/\(math (.*)\)/)[0], String(eval(mathStr)));
-        }
-
         if (message.match(/\(writefile .+\)/)) {
             if (message.match(/\(writefile (.+), (.+), (.+)\)/)) {
                 var file = message.match(/\(writefile (.+), (.+), (.+)\)/)[1],
                     append = (message.match(/\(writefile (.+), (.+), (.+)\)/)[2] == 'true' ? true : false),
                     string = message.match(/\(writefile (.+), (.+), (.+)\)/)[3];
-                $.writeToFile(string, './addons/' + file, append);
+                $.writeToFile(string, './addons/' + file.replace(/\.\./g, ''), append);
             }
             message = $.replace(message, message.match(/\(writefile (.+), (.+), (.+)\)/)[0], '');
             if (message == '') {
@@ -460,13 +473,15 @@
             message = apiTags(event, message);
         }
 
-        if (message.match('\n')) {
-            var splitMessage = message.split('\n');
+        if (message !== null) {
+            if (message.match('\n')) {
+                var splitMessage = message.split('\n');
 
-            for (var i = 0; i < splitMessage.length && i <= 4; ++i) {
-                $.say(splitMessage[i]);
+                for (var i = 0; i < splitMessage.length && i <= 4; ++i) {
+                    $.say(splitMessage[i]);
+                }
+                return null;
             }
-            return null;
         }
 
         return message;
@@ -609,6 +624,10 @@
 
         // Get the URL for a customapi, if applicable, and process $1 - $9.  See below about that.
         if ((regExCheck = message.match(reCustomAPI))) {
+            if (regExCheck[1].indexOf('(token)') !== -1 && $.inidb.HasKey('commandtoken', '', command)) {
+                regExCheck[1] = regExCheck[1].replace(/\(token\)/gi, $.inidb.GetString('commandtoken', '', command));
+            }
+
             if (regExCheck[1].indexOf('$1') != -1) {
                 for (var i = 1; i <= 9; i++) {
                     if (regExCheck[1].indexOf('$' + i) != -1) {
@@ -629,6 +648,10 @@
         // a custom JavaScript.  We limit $1 - $9 as well; 10 or more arguments being passed by users to an
         // API seems like overkill.  Even 9 does, to be honest.
         if ((regExCheck = message.match(reCustomAPIJson))) {
+            if (regExCheck[1].indexOf('(token)') !== -1 && $.inidb.HasKey('commandtoken', '', command)) {
+                regExCheck[1] = regExCheck[1].replace(/\(token\)/gi, $.inidb.GetString('commandtoken', '', command));
+            }
+
             if (regExCheck[1].indexOf('$1') != -1) {
                 for (var i = 1; i <= 9; i++) {
                     if (regExCheck[1].indexOf('$' + i) != -1) {
@@ -937,6 +960,46 @@
         }
 
         /*
+         * @commandpath tokencom [command] [token] - Stores a user/pass or API key to be replaced into a (customapi) tag. WARNING: This should be done from the bot console or web panel, if you run this from chat, anyone watching chat can copy your info!
+         */
+        if (command.equalsIgnoreCase('tokencom')) {
+            if (action === undefined) {
+                $.say($.whisperPrefix(sender) + $.lang.get('customcommands.token.usage'));
+                return;
+            }
+
+            action = action.replace('!', '').toLowerCase();
+            argsString = args.slice(1).join(' ');
+
+            var silent = false;
+            if (action.startsWith('silent@')) {
+                silent = true;
+                action = action.substr(7);
+            }
+
+            if (!$.commandExists(action)) {
+                $.say($.whisperPrefix(sender) + $.lang.get('cmd.404', action));
+                return;
+            } else if ($.inidb.get('command', action).match(/\(adminonlyedit\)/) && !$.isAdmin(sender)) {
+                if ($.getIniDbBoolean('settings', 'permComMsgEnabled', true)) {
+                    $.say($.whisperPrefix(sender) + $.lang.get('cmd.perm.404', $.getGroupNameById('1')));
+                }
+                return;
+            }
+
+            if (!silent) {
+                $.say($.whisperPrefix(sender) + $.lang.get('customcommands.token.success', action));
+            }
+
+            if (argsString.length() === 0) {
+                $.inidb.RemoveKey('commandtoken', '', action);
+            } else {
+                $.inidb.SetString('commandtoken', '', action, argsString);
+            }
+            return;
+        }
+
+        /*
          * @commandpath delcom [command] - Delete that custom command
          */
         if (command.equalsIgnoreCase('delcom')) {
@@ -961,6 +1024,7 @@
             $.inidb.del('permcom', action);
             $.inidb.del('pricecom', action);
             $.inidb.del('aliases', action);
+            $.inidb.del('commandtoken', action);
             $.unregisterChatCommand(action);
             delete customCommands[action];
             return;
@@ -1366,6 +1430,7 @@
         $.registerChatCommand('./commands/customCommands.js', 'delalias', 2);
         $.registerChatCommand('./commands/customCommands.js', 'delcom', 2);
         $.registerChatCommand('./commands/customCommands.js', 'editcom', 2);
+        $.registerChatCommand('./commands/customCommands.js', 'tokencom', 2);
         $.registerChatCommand('./commands/customCommands.js', 'permcom', 1);
         $.registerChatCommand('./commands/customCommands.js', 'commands', 7);
         $.registerChatCommand('./commands/customCommands.js', 'disablecom', 1);

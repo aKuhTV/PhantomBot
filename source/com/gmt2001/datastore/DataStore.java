@@ -164,6 +164,9 @@ public class DataStore {
         SetString(fName, section, key, value);
     }
 
+    public void IncreaseBatchString(String fName, String section, String[] keys, String value) {
+    }
+
     public void SetBatchString(String fName, String section, String[] key, String[] value) {
         for (int i = 0; i < key.length; i++) {
             SetString(fName, section, key[i], value[i]);
@@ -282,11 +285,11 @@ public class DataStore {
     }
 
     public boolean exists(String fName, String key) {
-        return HasKey(fName, "", key);
+        return HasKey(fName, null, key);
     }
 
     public String get(String fName, String key) {
-        return GetString(fName, "", key);
+        return GetString(fName, null, key);
     }
 
     public void set(String fName, String key, String value) {
@@ -358,7 +361,7 @@ public class DataStore {
     public Connection CreateConnection(String db, String user, String pass) {
         return null;
     }
-    
+
     public void CloseConnection() {
     }
 

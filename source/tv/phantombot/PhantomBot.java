@@ -1,4 +1,4 @@
-/*            
+/*
  * Copyright (C) 2016-2018 phantombot.tv
  *
  * This program is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ import com.gmt2001.YouTubeAPIv3;
 import com.gmt2001.datastore.DataStoreConverter;
 
 import com.illusionaryone.GitHubAPIv3;
-import com.illusionaryone.GoogleURLShortenerAPIv1;
+import com.illusionaryone.BitlyAPIv4;
 import com.illusionaryone.NoticeTimer;
 import com.illusionaryone.TwitchAlertsAPIv1;
 import com.illusionaryone.TwitterAPI;
@@ -158,6 +158,10 @@ public final class PhantomBot implements Listener {
     private String twitterConsumerSecret;
     private String twitterConsumerToken;
     private Boolean twitterAuthenticated;
+    
+    /* Bitly Information */
+    private String BitlyAPIKey = "";
+    private String BitlyGUID = "";
 
     /* TwitchAlerts Information */
     private String twitchAlertsKey = "";
@@ -208,6 +212,7 @@ public final class PhantomBot implements Listener {
     /* PhantomBot Information */
     private static PhantomBot instance;
     private static Boolean reloadScripts = false;
+    private static Boolean silentScriptsLoad = false;
     private static Boolean enableDebugging = false;
     private static Boolean enableDebuggingLogOnly = false;
     private static Boolean enableRhinoDebugger = false;
@@ -233,7 +238,7 @@ public final class PhantomBot implements Listener {
     private Boolean backupSQLiteAuto = false;
     private int backupSQLiteHourFrequency = 0;
     private int backupSQLiteKeepDays = 0;
-    
+
     // Error codes
     // [...] by convention, a nonzero status code indicates abnormal termination. (see System.exit() JavaDoc)
     private static final int EXIT_STATUS_OK = 0;
@@ -382,6 +387,7 @@ public final class PhantomBot implements Listener {
         this.pbProperties = pbProperties;
 
         /* Set the default bot variables */
+        this.enableDebugging = this.pbProperties.getProperty("debugon") == null ? false : this.pbProperties.getProperty("debugon").equalsIgnoreCase("true");
         this.botName = this.pbProperties.getProperty("user").toLowerCase();
         this.channelName = this.pbProperties.getProperty("channel").toLowerCase();
         this.ownerName = this.pbProperties.getProperty("owner").toLowerCase();
@@ -401,7 +407,6 @@ public final class PhantomBot implements Listener {
         this.webEnabled = this.pbProperties.getProperty("webenable", "true").equalsIgnoreCase("true");
         this.musicEnabled = this.pbProperties.getProperty("musicenable", "true").equalsIgnoreCase("true");
         this.useHttps = this.pbProperties.getProperty("usehttps", "false").equalsIgnoreCase("true");
-        this.socketServerTasksSize = Integer.parseInt(this.pbProperties.getProperty("wstasksize", "200"));
         this.testPanelServer = this.pbProperties.getProperty("testpanelserver", "false").equalsIgnoreCase("true");
 
         /* Set the datastore variables */
@@ -431,6 +436,10 @@ public final class PhantomBot implements Listener {
         this.streamElementsJWT = this.pbProperties.getProperty("streamelementsjwt", "");
         this.streamElementsID = this.pbProperties.getProperty("streamelementsid", "");
         this.streamElementsLimit = Integer.parseInt(this.pbProperties.getProperty("streamelementslimit", "5"));
+        
+        /* Set the Bitly variables */
+        this.BitlyAPIKey = this.pbProperties.getProperty("bitlyapikey", "");
+        this.BitlyGUID = this.pbProperties.getProperty("bitlyguid", "");
 
         /* Set the PhantomBot Commands API variables */
         this.dataRenderServiceAPIToken = this.pbProperties.getProperty("datarenderservicetoken", "");
@@ -508,7 +517,7 @@ public final class PhantomBot implements Listener {
         this.backupSQLiteAuto = this.pbProperties.getProperty("backupsqliteauto", "true").equalsIgnoreCase("true");
         this.backupSQLiteHourFrequency = Integer.parseInt(this.pbProperties.getProperty("backupsqlitehourfrequency", "24"));
         this.backupSQLiteKeepDays = Integer.parseInt(this.pbProperties.getProperty("backupsqlitekeepdays", "5"));
-        
+
         // Set the newSetup flag
         this.newSetup = this.pbProperties.getProperty("newSetup").equals("true");
 
@@ -558,11 +567,7 @@ public final class PhantomBot implements Listener {
 
             /* Handle index operations. */
             com.gmt2001.Console.debug.println("Checking database indexes, please wait...");
-            if (SqliteStore.instance().getUseIndexes()) {
-                dataStore.CreateIndexes();
-            } else {
-                dataStore.DropIndexes();
-            }
+            dataStore.CreateIndexes();
         }
 
         /* Set the client Id in the Twitch api. */
@@ -572,6 +577,12 @@ public final class PhantomBot implements Listener {
         if (!this.apiOAuth.isEmpty()) {
             TwitchAPIv5.instance().SetOAuth(this.apiOAuth);
             TwitchValidate.instance().validate(this.apiOAuth, "API (apioauth)");
+        }
+        
+        /* Set the Bitly token. */
+        if (!BitlyAPIKey.isEmpty() && !BitlyGUID.isEmpty()) {
+            BitlyAPIv4.instance().setAPIKey(BitlyAPIKey);
+            BitlyAPIv4.instance().setGUID(BitlyGUID);
         }
 
         /* Validate the chat OAUTH token. */
@@ -821,7 +832,7 @@ public final class PhantomBot implements Listener {
                     checkPortAvailabity(ytSocketPort);
                     if (useHttps) {
                         /* Set the music player server */
-                        youtubeSocketSecureServer = new YTWebSocketSecureServer(bindIP, ytSocketPort, youtubeOAuth, youtubeOAuthThro, httpsFileName, httpsPassword, socketServerTasksSize);
+                        youtubeSocketSecureServer = new YTWebSocketSecureServer(bindIP, ytSocketPort, youtubeOAuth, youtubeOAuthThro, httpsFileName, httpsPassword);
                         /* Start this youtube socket server */
                         youtubeSocketSecureServer.start();
                         print("YouTubeSocketSecureServer accepting connections on port: " + ytSocketPort + " (SSL)");
@@ -841,7 +852,7 @@ public final class PhantomBot implements Listener {
                         print("TEST PanelSocketSecureServer accepting connections on port: " + panelSocketPort + " (SSL)");
                     } else {
                         /* Set up the panel socket server */
-                        panelSocketSecureServer = new PanelSocketSecureServer(bindIP, panelSocketPort, webOAuth, webOAuthThro, httpsFileName, httpsPassword, socketServerTasksSize);
+                        panelSocketSecureServer = new PanelSocketSecureServer(bindIP, panelSocketPort, webOAuth, webOAuthThro, httpsFileName, httpsPassword);
                         /* Start the panel socket server */
                         panelSocketSecureServer.start();
                         print("PanelSocketSecureServer accepting connections on port: " + panelSocketPort + " (SSL)");
@@ -977,12 +988,7 @@ public final class PhantomBot implements Listener {
             byte[] bytes = data.getBytes(StandardCharsets.UTF_8);
 
             /* Write the data to that file */
-            Files.write(Paths.get("./web/panel/js/panelConfig.js"), bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-
-            // If betap write the file in that folder too.
-            if (new File("./web/beta-panel").isDirectory()) {
-            	Files.write(Paths.get("./web/beta-panel/js/utils/panelConfig.js"), bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
-            }
+            Files.write(Paths.get("./web/panel/js/utils/panelConfig.js"), bytes, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException ex) {
             com.gmt2001.Console.err.printStackTrace(ex);
         }
@@ -1047,7 +1053,7 @@ public final class PhantomBot implements Listener {
         }
         Script.global.defineProperty("random", random, 0);
         Script.global.defineProperty("youtube", YouTubeAPIv3.instance(), 0);
-        Script.global.defineProperty("shortenURL", GoogleURLShortenerAPIv1.instance(), 0);
+        Script.global.defineProperty("shortenURL", BitlyAPIv4.instance(), 0);
         Script.global.defineProperty("twitter", TwitterAPI.instance(), 0);
         Script.global.defineProperty("twitchCacheReady", PhantomBot.twitchCacheReady, 0);
         Script.global.defineProperty("isNightly", isNightly(), 0);
@@ -1142,13 +1148,28 @@ public final class PhantomBot implements Listener {
 
         /* Check to see if web is enabled */
         if (webEnabled) {
-            print("Shutting down all web socket servers...");
+            print("Shutting down all web socket/http servers...");
             if (!useHttps) {
                 httpServer.close();
+                if (testPanelServer) {
+                    newPanelSocketServer.dispose();
+                } else {
+                    panelSocketServer.dispose();
+                }
+                if (musicEnabled) {
+                    youtubeSocketServer.dispose();
+                }
             } else {
                 httpsServer.close();
+                if (testPanelServer) {
+                    newPanelSocketServer.dispose();
+                } else {
+                    panelSocketSecureServer.dispose();
+                }
+                if (musicEnabled) {
+                    youtubeSocketSecureServer.dispose();
+                }
             }
-            youtubeSocketServer.dispose();
         }
 
         try {
@@ -1241,8 +1262,9 @@ public final class PhantomBot implements Listener {
         /* Check to see if the sender is jtv */
         if (sender.equalsIgnoreCase("jtv")) {
             /* Splice the mod list so we can get all the mods */
-            if (message.startsWith("The moderators of this room are: ")) {
-                String[] moderators = message.substring(33).split(", ");
+            String searchStr = "The moderators of this channel are: ";
+            if (message.startsWith(searchStr)) {
+                String[] moderators = message.substring(searchStr.length()).split(", ");
 
                 /* Check to see if the bot is a moderator */
                 for (String moderator : moderators) {
@@ -1250,6 +1272,7 @@ public final class PhantomBot implements Listener {
                         EventBus.instance().postAsync(new IrcChannelUserModeEvent(this.session, this.session.getBotName(), "O", true));
                         /* Allow the bot to sends message to this session */
                         event.getSession().setAllowSendMessages(true);
+                        com.gmt2001.Console.debug.println("Allowing messages to be sent due to .mods response +O");
                     }
                 }
             }
@@ -1333,9 +1356,9 @@ public final class PhantomBot implements Listener {
                 PhantomBot.exitOK();
             }
         }
-        
+
         Properties startProperties = ConfigurationManager.getConfiguration();
-        
+
         setStaticFields(startProperties);
 
         /* Start PhantomBot */
@@ -1349,6 +1372,8 @@ public final class PhantomBot implements Listener {
         PhantomBot.setDebuggingLogOnly(ConfigurationManager.getBoolean(startProperties, ConfigurationManager.PROP_DEBUGLOG, false));
         /* Check to enable Script Reloading */
         PhantomBot.setReloadScripts(ConfigurationManager.getBoolean(startProperties, ConfigurationManager.PROP_RELOADSCRIPTS, false));
+        /* Check to silence the loading of scripts at startup. */
+        PhantomBot.setSilentScriptsLoad(ConfigurationManager.getBoolean(startProperties, ConfigurationManager.PROP_SILENTSCRIPTSLOAD, false));
         /* Check to enable Rhino Debugger */
         PhantomBot.setEnableRhinoDebugger(ConfigurationManager.getBoolean(startProperties, ConfigurationManager.PROP_RHINODEBUGGER, false));
     }
@@ -1363,7 +1388,14 @@ public final class PhantomBot implements Listener {
         if (reloadScripts)
             com.gmt2001.Console.out.println("Enabling Script Reloading");
         PhantomBot.reloadScripts = reloadScripts;
-        
+
+    }
+
+    private static void setSilentScriptsLoad(Boolean silentScriptsLoad) {
+        if (silentScriptsLoad)
+            com.gmt2001.Console.out.println("Enabling Silent Script Load");
+        PhantomBot.silentScriptsLoad = silentScriptsLoad;
+
     }
 
     /** gen a random string */
@@ -1543,23 +1575,27 @@ public final class PhantomBot implements Listener {
             }
         }
     }
-    
+
     /**
      * End PhantomBot with an error state
      */
     public static void exitError() {
         System.exit(EXIT_STATUS_ERROR);
     }
-    
+
     /**
      * End PhantomBot with an OK state
      */
     public static void exitOK() {
         System.exit(EXIT_STATUS_OK);
     }
-    
+
     public static Boolean getReloadScripts() {
         return reloadScripts;
+    }
+
+    public static Boolean getSilentScriptsLoad() {
+        return silentScriptsLoad;
     }
 
     public static Boolean getEnableDebugging() {

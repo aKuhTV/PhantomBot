@@ -149,7 +149,7 @@ public class MySQLStore extends DataStore {
             try (Statement statement = connection.createStatement()) {
                 statement.setQueryTimeout(10);
 
-                statement.executeUpdate("CREATE TABLE phantombot_" + fName + " (section LONGTEXT, variable varchar(255) NOT NULL, value LONGTEXT, PRIMARY KEY (variable(191)));");
+                statement.executeUpdate("CREATE TABLE phantombot_" + fName + " (section LONGTEXT, variable varchar(255) NOT NULL, value LONGTEXT, PRIMARY KEY (section(30), variable(150)));");
             } catch (SQLException ex) {
                 com.gmt2001.Console.err.printStackTrace(ex);
             }
@@ -308,7 +308,7 @@ public class MySQLStore extends DataStore {
         fName = validateFname(fName);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 try (PreparedStatement statement = connection.prepareStatement("SELECT variable FROM phantombot_" + fName + " WHERE section=?;")) {
                     statement.setQueryTimeout(10);
                     statement.setString(1, section);
@@ -357,7 +357,7 @@ public class MySQLStore extends DataStore {
         fName = validateFname(fName);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 try (PreparedStatement statement = connection.prepareStatement("SELECT variable, value FROM phantombot_" + fName + " WHERE section=?;")) {
                     statement.setQueryTimeout(10);
                     statement.setString(1, section);
@@ -416,7 +416,7 @@ public class MySQLStore extends DataStore {
         offset = sanitizeOffset(offset);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 if (isNumber) {
                     statementStr = "SELECT variable FROM phantombot_" + fName + " WHERE section=? ORDER BY CAST(variable as UNSIGNED) " + order + "  LIMIT " + limit + " OFFSET " + offset + ";";
                 } else {
@@ -488,7 +488,7 @@ public class MySQLStore extends DataStore {
         offset = sanitizeOffset(offset);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 if (isNumber) {
                     statementStr = "SELECT variable FROM phantombot_" + fName + " WHERE section=? ORDER BY CAST(value as UNSIGNED) " + order + " LIMIT " + limit + " OFFSET " + offset + ";";
                 } else {
@@ -547,7 +547,7 @@ public class MySQLStore extends DataStore {
         fName = validateFname(fName);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 try (PreparedStatement statement = connection.prepareStatement("SELECT variable FROM phantombot_" + fName + " WHERE section=? AND value LIKE ?;")) {
                     statement.setQueryTimeout(10);
                     statement.setString(1, section);
@@ -596,7 +596,7 @@ public class MySQLStore extends DataStore {
         fName = validateFname(fName);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 try (PreparedStatement statement = connection.prepareStatement("SELECT variable FROM phantombot_" + fName + " WHERE section=? AND variable LIKE ?;")) {
                     statement.setQueryTimeout(10);
                     statement.setString(1, section);
@@ -648,7 +648,7 @@ public class MySQLStore extends DataStore {
         offset = sanitizeOffset(offset);
 
         if (FileExists(fName)) {
-            if (section.length() > 0) {
+            if (section != null) {
                 try (PreparedStatement statement = connection.prepareStatement("SELECT variable FROM phantombot_" + fName + " WHERE section=? AND variable LIKE ? ORDER BY variable " + order + " LIMIT " + limit + " OFFSET " + offset + ";")) {
                     statement.setQueryTimeout(10);
                     statement.setString(1, section);
@@ -700,7 +700,7 @@ public class MySQLStore extends DataStore {
             return false;
         }
 
-        if (section.length() > 0) {
+        if (section != null) {
             try (PreparedStatement statement = connection.prepareStatement("SELECT value FROM phantombot_" + fName + " WHERE section=? AND variable=?;")) {
                 statement.setQueryTimeout(10);
                 statement.setString(1, section);
@@ -746,7 +746,7 @@ public class MySQLStore extends DataStore {
             return result;
         }
 
-        if (section.length() > 0) {
+        if (section != null) {
             try (PreparedStatement statement = connection.prepareStatement("SELECT variable FROM phantombot_" + fName + " WHERE section=? AND value=?;")) {
                 statement.setQueryTimeout(10);
                 statement.setString(1, section);
@@ -793,7 +793,7 @@ public class MySQLStore extends DataStore {
             return result;
         }
 
-        if (section.length() > 0) {
+        if (section != null) {
             try (PreparedStatement statement = connection.prepareStatement("SELECT value FROM phantombot_" + fName + " WHERE section=? AND variable=?;")) {
                 statement.setQueryTimeout(10);
                 statement.setString(1, section);
@@ -888,6 +888,47 @@ public class MySQLStore extends DataStore {
                     statement.executeUpdate();
                 }
             }
+        } catch (SQLException ex) {
+            com.gmt2001.Console.err.printStackTrace(ex);
+        }
+    }
+
+    @Override
+    public void IncreaseBatchString(String fName, String section, String[] keys, String value) {
+        fName = validateFname(fName);
+
+        AddFile(fName);
+
+        try {
+            Statement statement = connection.createStatement();
+            statement.addBatch("UPDATE phantombot_" + fName + " SET value = CAST(value AS INTEGER) + " + value + " WHERE section = '" + section + "' AND variable IN ('" + String.join("', '", keys) + "');");
+
+            StringBuilder sb = new StringBuilder(66 + fName.length() + (keys.length * (keys[0].length() + 17 + section.length() + value.length())));
+            
+            sb.append("INSERT IGNORE INTO phantombot_");
+            sb.append(fName);
+            sb.append(" (section, variable, value) VALUES ");
+
+            boolean first = true;
+            for (String k : keys) {
+                if (!first) {
+                    sb.append(",");
+                }
+
+                first = false;
+                sb.append("('");
+                sb.append(section);
+                sb.append("', '");
+                sb.append(k);
+                sb.append("', ");
+                sb.append(value);
+                sb.append(")");
+            }
+            
+            sb.append(";");
+
+            statement.addBatch(sb.toString());
+            statement.executeBatch();
         } catch (SQLException ex) {
             com.gmt2001.Console.err.printStackTrace(ex);
         }

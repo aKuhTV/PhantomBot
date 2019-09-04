@@ -120,6 +120,10 @@ import org.json.JSONObject;
 import org.json.JSONException;
 import org.json.JSONStringer;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 import tv.phantombot.event.EventBus;
 import tv.phantombot.event.webpanel.websocket.WebPanelSocketUpdateEvent;
 
@@ -144,6 +148,7 @@ public class PanelSocketServer extends WebSocketServer {
      * @param port         The port to bind to.
      * @param authString   The authorization string to use for read/write connectivity.
      * @param authStringRO The authorization string to use for read-only connectivity.
+     * @throws java.lang.Exception
      */
     public PanelSocketServer(String ip, int port, String authString, String authStringRO) throws Exception {
         super((!ip.isEmpty() ? new InetSocketAddress(ip, port) : new InetSocketAddress(port)));
@@ -151,6 +156,7 @@ public class PanelSocketServer extends WebSocketServer {
         this.authStringRO = authStringRO;
 
         Thread.setDefaultUncaughtExceptionHandler(com.gmt2001.UncaughtExceptionHandler.instance());
+        doPingHandler();
     }
 
     /**
@@ -220,6 +226,11 @@ public class PanelSocketServer extends WebSocketServer {
         String     uniqueID;
         int        dataInt;
 
+        /* If a PONG is received, ignore it. */
+        if (jsonString.equals("PONG")) {
+            return;
+        }
+
         try {
             jsonObject = new JSONObject(jsonString);
         } catch (JSONException ex) {
@@ -262,12 +273,12 @@ public class PanelSocketServer extends WebSocketServer {
         // debugMsg("PanelSocketServer::onMessage(" + jsonString + ")");
 
         try {
-            if (jsonObject.has("command")) {
+            if (jsonObject.has("command") && !sessionData.isReadOnly()) {
                 String command = jsonObject.getString("command");
                 String username = jsonObject.has("username") ? jsonObject.getString("username") : PhantomBot.instance().getBotName();
                 uniqueID = jsonObject.has("query_id") ? jsonObject.getString("query_id") : "";
                 doHandleCommand(webSocket, command, username, uniqueID, true);
-            } else if (jsonObject.has("command_sync")) {
+            } else if (jsonObject.has("command_sync") && !sessionData.isReadOnly()) {
                 String command = jsonObject.getString("command_sync");
                 String username = jsonObject.has("username") ? jsonObject.getString("username") : PhantomBot.instance().getBotName();
                 uniqueID = jsonObject.has("query_id") ? jsonObject.getString("query_id") : "";
@@ -356,7 +367,7 @@ public class PanelSocketServer extends WebSocketServer {
      */
     @Override
     public void onError(WebSocket webSocket, Exception e) {
-        if (e.toString().indexOf("WebsocketNotConnectedException") == -1) {
+        if (!e.toString().contains("WebsocketNotConnectedException")) {
             com.gmt2001.Console.err.printStackTrace(e);
         }
     }
@@ -403,15 +414,15 @@ public class PanelSocketServer extends WebSocketServer {
      * @param text Text to send to all open WebSockets.
      */
     public void sendToAll(String text) {
-        Collection<WebSocket> con = connections();
+        Collection<WebSocket> con = this.getConnections();
         synchronized (con) {
-            for (WebSocket c : con) {
+            con.forEach((c) -> {
                 try {
                     c.send(text);
                 } catch (Exception ex) {
                     com.gmt2001.Console.debug.println("Failed to send a message to the panel socket: [" + ex.getClass().getSimpleName() + "] " + ex.getMessage());
                 }
-            }
+            });
         }
     }
 
@@ -854,6 +865,17 @@ public class PanelSocketServer extends WebSocketServer {
     }
 
     /**
+     * Timer that sends PINGs to the clients.
+     */
+    private void doPingHandler() {
+        ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
+        service.scheduleAtFixedRate(() -> {
+            Thread.currentThread().setName("tv.phantombot.panel.NewPanelSocketServer::doPingHandler");
+            sendToAll("PING");
+        }, 0, 2, TimeUnit.MINUTES);
+    }
+
+    /**
      * Wrapper for the Console debug message.
      *
      * @param message Message to display.
@@ -902,6 +924,10 @@ public class PanelSocketServer extends WebSocketServer {
             return false;
         }
         return value.equals(authUsername);
+    }
+
+    @Override
+    public void onStart() {
     }
 
     /**

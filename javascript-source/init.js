@@ -314,7 +314,7 @@
             try {
                 hook.handlers[i].handler(event);
             } catch (ex) {
-                $.log.error('Error with Event Handler [' + hookName + '] Script [' + hook.handlers[i].scriptName + '] Stacktrace [' + ex.stack.trim().split('\n').join(' > ').replace(/anonymous\(\)@|callHook\(\)@/g, '') + '] Exception [' + ex + ']');
+                $.log.error('Error with Event Handler [' + hookName + '] Script [' + hook.handlers[i].scriptName + '] Stacktrace [' + ex.stack.trim().replace(/\r/g, '').split('\n').join(' > ').replace(/anonymous\(\)@|callHook\(\)@/g, '') + '] Exception [' + ex + ']');
             }
         } else {
             for (i in hook.handlers) {
@@ -322,7 +322,7 @@
                     try {
                         hook.handlers[i].handler(event);
                     } catch (ex) {
-                        $.log.error('Error with Event Handler [' + hookName + '] Script [' + hook.handlers[i].scriptName + '] Stacktrace [' + ex.stack.trim().split('\n').join(' > ').replace(/anonymous\(\)@|callHook\(\)@/g, '') + '] Exception [' + ex + ']');
+                        $.log.error('Error with Event Handler [' + hookName + '] Script [' + hook.handlers[i].scriptName + '] Stacktrace [' + ex.stack.trim().replace(/\r/g, '').split('\n').join(' > ').replace(/anonymous\(\)@|callHook\(\)@/g, '') + '] Exception [' + ex + ']');
                     }
                 }
             }
@@ -333,48 +333,55 @@
      * @function init - Loads everything for the scripts.
      */
     function init() {
+        // Do not print a line to the console for each module (script) that is loaded.
+        var silentScriptsLoad = Packages.tv.phantombot.PhantomBot.getSilentScriptsLoad().toString().equals('true');
+
         // Generate JavaScript trampolines for Java functions.
         generateJavaTrampolines();
         // Register events.
         events();
 
+        if (silentScriptsLoad) {
+            consoleLn('Loading modules...');
+        }
+
         // Load all core modules.
-        loadScript('./core/misc.js');
-        loadScript('./core/jsTimers.js');
-        loadScript('./core/updates.js');
-        loadScript('./core/chatModerator.js');
-        loadScript('./core/fileSystem.js');
-        loadScript('./core/lang.js');
-        loadScript('./core/commandPause.js');
-        loadScript('./core/logging.js');
-        loadScript('./core/commandRegister.js');
-        loadScript('./core/whisper.js');
-        loadScript('./core/commandCoolDown.js');
-        loadScript('./core/keywordCoolDown.js');
-        loadScript('./core/gameMessages.js');
-        loadScript('./core/patternDetector.js');
-        loadScript('./core/permissions.js');
-        loadScript('./core/streamInfo.js');
-        loadScript('./core/timeSystem.js');
-        loadScript('./core/initCommands.js');
-        loadScript('./core/panelCommands.js');
+        loadScript('./core/misc.js', false, silentScriptsLoad);
+        loadScript('./core/jsTimers.js', false, silentScriptsLoad);
+        loadScript('./core/updates.js', false, silentScriptsLoad);
+        loadScript('./core/chatModerator.js', false, silentScriptsLoad);
+        loadScript('./core/fileSystem.js', false, silentScriptsLoad);
+        loadScript('./core/lang.js', false, silentScriptsLoad);
+        loadScript('./core/commandPause.js', false, silentScriptsLoad);
+        loadScript('./core/logging.js', false, silentScriptsLoad);
+        loadScript('./core/commandRegister.js', false, silentScriptsLoad);
+        loadScript('./core/whisper.js', false, silentScriptsLoad);
+        loadScript('./core/commandCoolDown.js', false, silentScriptsLoad);
+        loadScript('./core/keywordCoolDown.js', false, silentScriptsLoad);
+        loadScript('./core/gameMessages.js', false, silentScriptsLoad);
+        loadScript('./core/patternDetector.js', false, silentScriptsLoad);
+        loadScript('./core/permissions.js', false, silentScriptsLoad);
+        loadScript('./core/streamInfo.js', false, silentScriptsLoad);
+        loadScript('./core/timeSystem.js', false, silentScriptsLoad);
+        loadScript('./core/initCommands.js', false, silentScriptsLoad);
+        loadScript('./core/panelCommands.js', false, silentScriptsLoad);
 
         // Load all the other modules.
-        loadScriptRecursive('.');
+        loadScriptRecursive('.', silentScriptsLoad);
 
         // Load Discord modules if need be.
         if (!$.hasDiscordToken) {
-            loadScript('./discord/core/misc.js');
-            loadScript('./discord/core/accountLink.js');
-            loadScript('./discord/core/patternDetector.js');
-            loadScript('./discord/core/moderation.js');
-            loadScript('./discord/core/registerCommand.js');
-            loadScript('./discord/core/accountLink.js');
-            loadScript('./discord/core/commandCooldown.js');
-            loadScript('./discord/core/roleManager.js');
+            loadScript('./discord/core/misc.js', false, silentScriptsLoad);
+            loadScript('./discord/core/accountLink.js', false, silentScriptsLoad);
+            loadScript('./discord/core/patternDetector.js', false, silentScriptsLoad);
+            loadScript('./discord/core/moderation.js', false, silentScriptsLoad);
+            loadScript('./discord/core/registerCommand.js', false, silentScriptsLoad);
+            loadScript('./discord/core/accountLink.js', false, silentScriptsLoad);
+            loadScript('./discord/core/commandCooldown.js', false, silentScriptsLoad);
+            loadScript('./discord/core/roleManager.js', false, silentScriptsLoad);
 
             // Load the other discord modules
-            loadScriptRecursive('./discord');
+            loadScriptRecursive('./discord', silentScriptsLoad);
             // Mark that we are using Discord.
             // This is used by the new panel.
             $.inidb.set('panelData', 'hasDiscord', 'true');
@@ -385,6 +392,9 @@
         // Load new panel handler.
         loadScript('./core/panelHandler.js', false, true);
 
+        if (silentScriptsLoad) {
+            consoleLn('Modules have been loaded.');
+        }
         $.log.event('Bot modules loaded. Initializing main functions...');
 
         // Register custom commands.
@@ -424,10 +434,6 @@
          */
         $api.on($script, 'ircChannelMessage', function(event) {
             callHook('ircChannelMessage', event, false);
-
-            if (isModuleEnabled('./handlers/panelHandler.js')) {
-                $.panelDB.updateChatLinesDB(event.getSender());
-            }
         });
 
         /*
@@ -467,19 +473,26 @@
             // Check if the command has an alias.
             if ($.aliasExists(command)) {
                 var alias = $.getIniDbString('aliases', command),
-                    aliasArguments = '';
+                    aliasCommand,
+                    aliasArguments,
+                    subcmd,
+                    parts;
 
                 if (alias.indexOf(';') === -1) {
-                    var parts = alias.split(' ', 2);
+                    parts = alias.split(' ');
+                    aliasCommand = parts.shift();
+                    aliasArguments = parts.join(' ');
 
-                    $.command.run(sender, parts[0], ((parts[1] !== undefined ? parts[1] : '') + ' ' + args.join(' ')), event.getTags());
+                    $.command.run(sender, aliasCommand, aliasArguments + ' ' + args.join(' '), event.getTags());
                 } else {
-                    var parts = alias.split(';');
+                    parts = alias.split(';');
 
                     for (var i = 0; i < parts.length; i++) {
-                        command = parts[i].split(' ');
+                        subcmd = parts[i].split(' ');
+                        aliasCommand = subcmd.shift();
+                        aliasArguments = subcmd.join(' ');
 
-                        $.command.run(sender, command[0], ((command[1] !== undefined ? command[1] : '') + ' ' + args.join(' ')), event.getTags());
+                        $.command.run(sender, aliasCommand, aliasArguments + ' ' + args.join(' '), event.getTags());
                     }
                 }
                 return;
@@ -494,7 +507,7 @@
 
             // Check the command cooldown.
             if ($.coolDown.get(command, sender, isMod) !== 0) {
-                $.sayWithTimeout($.whisperPrefix(sender) + $.lang.get('init.cooldown.msg', command, $.coolDown.getSecs(sender, command)), $.getIniDbBoolean('settings', 'coolDownMsgEnabled', false));
+                $.sayWithTimeout($.whisperPrefix(sender) + $.lang.get('init.cooldown.msg', command, $.coolDown.getSecs(sender, command, isMod)), $.getIniDbBoolean('settings', 'coolDownMsgEnabled', false));
                 consoleDebug('Command !' + command + ' was not sent due to it being on cooldown.');
                 return;
             } else
@@ -523,6 +536,7 @@
         $api.on($script, 'discordChannelCommand', function(event) {
             var username = event.getUsername(),
                 command = event.getCommand(),
+                user = event.getDiscordUser(),
                 channel = event.getDiscordChannel(),
                 channelName = event.getChannel(),
                 channelId = event.getChannelId(),
@@ -538,7 +552,24 @@
                 command = event.setCommand($.discord.getCommandAlias(command));
             }
 
-            if (isAdmin == false && $.discord.permCom(command, (args[0] !== undefined && $.discord.subCommandExists(command, args[0].toLowerCase()) ? args[0].toLowerCase() : '')) !== 0) {
+            // Check permissions.
+            var perm = $.discord.permCom(command, (args[0] !== undefined && $.discord.subCommandExists(command, args[0].toLowerCase()) ? args[0].toLowerCase() : ''));
+            var hasPerms = false;
+
+            // If more permissions are added, we'll have to use a loop here.
+            if (perm.permissions[0].selected.equals('true') && isAdmin == true) {
+                hasPerms = true;
+            } else {
+                for (var i = 0; i < perm.roles.length; i++) {
+                    if (user.hasRole($.discordAPI.getRoleByID(perm.roles[i])) == true) {
+                        hasPerms = true;
+                        break;
+                    }
+                }
+            }
+
+            // No permissions, return.
+            if (!hasPerms) {
                 return;
             }
 
@@ -564,6 +595,28 @@
             if ($.discord.getCommandCost(command) > 0) {
                 $.discord.decrUserPoints(senderId, $.discord.getCommandCost(command));
             }
+        });
+
+        /*
+         * @event discordReady
+         */
+        $api.on($script, 'discordReady', function(event) {
+            var roles = $.discordAPI.getGuildRoles();
+            var perms = {
+                roles: []
+            };
+
+            for (var i = 0; i < roles.size(); i++) {
+                perms.roles.push({
+                    'name' : roles.get(i).getName() + '',
+                    '_id': roles.get(i).getStringID() + '',
+                    'selected': 'false'
+                });
+            }
+
+            $.inidb.set('discordPermsObj', 'obj', JSON.stringify(perms));
+
+            callHook('discordReady', event, false);
         });
 
         /*
@@ -908,7 +961,7 @@
         $api.on($script, 'twitchMassSubscriptionGifted', function(event) {
             callHook('twitchMassSubscriptionGifted', event, false);
         });
-        
+
         /*
          * @event twitchAnonymousSubscriptionGift
          */
@@ -959,10 +1012,45 @@
         });
 
         /*
+         * @event discordUserVoiceChannelJoin
+         */
+        $api.on($script, 'discordUserVoiceChannelJoin', function(event) {
+            callHook('discordUserVoiceChannelJoin', event, false);
+        });
+
+        /*
+         * @event discordUserVoiceChannelPart
+         */
+        $api.on($script, 'discordUserVoiceChannelPart', function(event) {
+            callHook('discordUserVoiceChannelPart', event, false);
+        });
+
+        /*
          * @event discordMessageReaction
          */
         $api.on($script, 'discordMessageReaction', function(event) {
             callHook('discordMessageReaction', event, false);
+        });
+
+        /*
+         * @event discordRoleCreated
+         */
+        $api.on($script, 'discordRoleCreated', function(event) {
+            callHook('discordRoleCreated', event, false);
+        });
+
+        /*
+         * @event discordRoleUpdated
+         */
+        $api.on($script, 'discordRoleUpdated', function(event) {
+            callHook('discordRoleUpdated', event, false);
+        });
+
+        /*
+         * @event discordRoleDeleted
+         */
+        $api.on($script, 'discordRoleDeleted', function(event) {
+            callHook('discordRoleDeleted', event, false);
         });
 
         /*
@@ -971,7 +1059,7 @@
         $api.on($script, 'webPanelSocketUpdate', function(event) {
             callHook('webPanelSocketUpdate', event, false);
         });
-        
+
         /*
          * @event PubSubModerationDelete
          */
